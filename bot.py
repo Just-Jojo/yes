@@ -53,7 +53,7 @@ class Bot(commands.Bot): # I doubt this bot will require sharding as this will b
     def __init__(self):
         self.prefix_manager = PrefixManager(self.loop)
         async def _prefix(bot: Bot, msg: discord.Message) -> List[str]:
-            base = ["j%", "J%"]
+            base = config.prefixes
             if msg.guild:
                 prefixes = await self.prefix_manager()
                 base = prefixes or base
