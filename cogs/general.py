@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import nextcord as discord
@@ -10,14 +11,11 @@ from nextcord.ext import commands
 
 from utils import Context
 
-import logging
-
 if TYPE_CHECKING:
     from bot import Bot
 
 
-log = logging.getLogger(__file__)
-log.setLevel(logging.DEBUG)
+log = logging.getLogger("general")
 
 
 class General(commands.Cog):

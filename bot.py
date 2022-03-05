@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
+import logging.handlers
 import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Type, TypeVar
+from typing import TYPE_CHECKING, Iterable, List, Optional, Type, TypeVar, Union
 
 import nextcord as discord  # nextcord tbh
 from databases import Database
@@ -18,7 +19,33 @@ from utils import Context
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
 CTX = TypeVar("CTX")
-extensions: List[str] = [f"cogs.{ext}" for ext in ("general",)]
+extensions: List[str] = [f"cogs.{ext}" for ext in ("general", "blacklist")]
+
+
+@contextmanager
+def init_logging():
+    try:
+        logging.getLogger("nextcord").setLevel(logging.INFO)
+        logging.getLogger("nextcord.http").setLevel(logging.WARNING)
+        logging.getLogger("nextcord.gateway").setLevel(logging.WARNING)
+        log = logging.getLogger()
+        log.setLevel(logging.INFO)
+        handler = logging.handlers.RotatingFileHandler(
+            filename="yesbot.log", maxBytes=1_000_000, encoding="utf-8", mode="w"
+        )
+        dt_fmt = "%Y-%m-%d %H:%M:%S"
+        fmt = logging.Formatter("[{asctime}] [{levelname}] {name}: {message}", dt_fmt, style="{")
+        handler.setFormatter(fmt)
+        log.addHandler(handler)
+        stdout = logging.StreamHandler(sys.stdout)
+        stdout.setFormatter(fmt)
+        log.addHandler(stdout)
+        yield
+    finally:
+        handlers = log.handlers[:]
+        for hndl in handlers:
+            hndl.close()
+            log.removeHandler(hndl)
 
 
 class PrefixManager:
@@ -37,14 +64,50 @@ class PrefixManager:
             return []
         return json.loads(data)
 
-    async def update_prefixes(self, guild_id: int, prefixes: List[str]) -> None:
-        new = json.dumps(prefixes)
-        await self.cursor.execute(
-            statements.INSERT_OR_UPDATE_PREFIXES, {"prefixes": new, "guild_id": guild_id}
-        )
+    async def update_prefixes(self, guild_id: int, prefixes: List[str] = None) -> None:
+        new = json.dumps(prefixes or [])
+        async with self.cursor.transaction() as tr:
+            await self.cursor.execute(
+                statements.UPSERT_PREFIXES, {"prefixes": new, "guild_id": guild_id}
+            )
 
     async def teardown(self):
         await self.cursor.disconnect()
+
+
+class BlacklistManager:
+    def __init__(self, loop: asyncio.AbstractEventLoop = None):
+        self.loop = loop or asyncio.get_event_loop()
+        self.cursor = Database(f"sqlite:///{Path(__file__).parent}/data/blacklist.db")
+        self.loop.create_task(self.initialize())
+
+    async def initialize(self):
+        await self.cursor.connect()
+        await self.cursor.execute(statements.CREATE_BLACKLIST_TABLE)
+
+    async def get_blacklist(self, user_id: int = None) -> Dict[int, str]:
+        if not user_id:
+            data = await self.cursor.fetch_all("SELECT user_id, reason FROM blacklist;")
+            return {k: v for k, v in data}
+        await self.cursor.fetch_val(statements.SELECT_BLACKLIST, {"user_id": user_id})
+
+    async def add_to_blacklist(self, users: Iterable[int], reason: str) -> None:
+        async with self.cursor.transaction():
+            for user in users:
+                await self.cursor.execute(
+                    statements.UPSERT_REASON, {"user_id": user, "reason": reason}
+                )
+
+    async def remove_from_blacklist(self, users: Iterable[int]) -> None:
+        async with self.cursor.transaction():
+            if not users:
+                await self.cursor.execute("DROP TABLE blacklist")
+                await self.cursor.execute(statements.CREATE_BLACKLIST_TABLE)
+                return
+            for user in users:
+                await self.cursor.execute(
+                    "ALTER TABLE blacklist DROP COLUMN :user_id", {"user_id": user}
+                )
 
 
 class Bot(
@@ -63,9 +126,9 @@ class Bot(
             if msg.guild:
                 prefixes = await self.prefix_manager.get_prefixes(msg.guild.id)
                 base = prefixes or base
-            return commands.when_mentioned_or(
-                *base
-            )(bot, msg)  # Always gonna have the bot mention as a prefix :D
+            return commands.when_mentioned_or(*base)(
+                bot, msg
+            )  # Always gonna have the bot mention as a prefix :D
 
         super().__init__(_prefix, help_command=None)
         for ext in extensions:
@@ -73,8 +136,10 @@ class Bot(
                 self.load_extension(ext)
             except commands.ExtensionFailed as e:
                 log.exception("Failed to load extension %s", ext, exc_info=e)
+        self.blacklist_manager = BlacklistManager(self.loop)
 
     async def shutdown(self):
+        await self.prefix_manager.teardown()
         await self.close()
         sys.exit(0)
 
@@ -89,6 +154,12 @@ class Bot(
         if ctx.guild:
             base = await self.prefix_manager.get_prefixes(ctx.guild.id) or base
         return base
+
+    async def change_prefixes(self, ctx: Context, prefixes: List[str] = None):
+        await self.prefix_manager.update_prefixes(ctx.guild.id, prefixes)
+
+    async def get_blacklist(self) -> ...:
+        ...
 
     async def on_command_error(self, ctx: Context, exception: BaseException) -> None:
         if isinstance(exception, commands.CommandNotFound):
@@ -106,12 +177,13 @@ class Bot(
             )  # Idk if I'm gonna have nsfw stuff yet
         else:
             await ctx.send("I'm sorry! That command errored.")
-            log.exception(f"Error in command '{ctx.command.name}'", exc_info=exception)
+            log.exception("Error in command '%s'", ctx.command.name, exc_info=exception)
 
     async def start(self, *args, **kwargs) -> None:
         await super().start(config.token, reconnect=True)
 
 
 if __name__ == "__main__":
-    bot = Bot()
-    bot.run()
+    with init_logging():
+        bot = Bot()
+        bot.run()

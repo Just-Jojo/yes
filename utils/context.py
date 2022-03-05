@@ -29,6 +29,8 @@ class Context(commands.Context):
         command = command or self.command
         await self.bot.show_help(self, command)
 
+    send_help = show_help  # I forgot about this
+
     async def maybe_send_embed(
         self,
         msg: str,
