@@ -24,7 +24,7 @@ reformat:
 
 newenv:
 	$(PYTHON) -m venv --clear .venv
-	.venv/bin/python -m pip install -U pip setuptools wheel nextcord mypy databases
+	.venv/bin/python -m pip install -U pip setuptools wheel black isort nextcord mypy databases databases[sqlite]
 
 help:
 	@echo "$$HELP_BODY"

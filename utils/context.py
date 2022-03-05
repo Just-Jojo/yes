@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import nextcord as discord
+from typing import TYPE_CHECKING, Optional
 
-from nextcord.ext import commands # type:ignore
-from typing import Optional, TYPE_CHECKING
+import nextcord as discord
+from nextcord.ext import commands  # type:ignore
 
 if TYPE_CHECKING:
     from ..bot import Bot
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class Context(commands.Context):
     """An extension of discord.ext.commands.Context"""
+
     if TYPE_CHECKING:
         bot: Bot
 
@@ -27,5 +28,18 @@ class Context(commands.Context):
         """A wrapper for bot's send help"""
         command = command or self.command
         await self.bot.show_help(self, command)
+
+    async def maybe_send_embed(
+        self,
+        msg: str,
+        *,
+        title: Optional[str] = discord.embeds.EmptyEmbed,
+        use_title: bool = False,
+    ) -> discord.Message:
+        if self.guild and not self.channel.permissions_for(ctx.me).embed_links:
+            msg = msg if not use_title or not title else f"**{title}**\n{msg}"
+            return await self.send(msg)
+        return await self.send(embed=discord.Embed(title=title, description=msg, colour=0x00FFFF))
+
 
 __all__ = ["Context"]
