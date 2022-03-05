@@ -106,7 +106,7 @@ class BlacklistManager:
                 return
             for user in users:
                 await self.cursor.execute(
-                    "ALTER TABLE blacklist DROP COLUMN :user_id", {"user_id": user}
+                    "DELETE FROM blacklist WHERE user_id=:user_id", {"user_id": user}
                 )
 
 
