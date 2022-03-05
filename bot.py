@@ -52,6 +52,7 @@ class PrefixManager:
     def __init__(self, loop: asyncio.AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
         self.cursor = Database(f"sqlite:///{Path(__file__).parent}/data/prefixes.db")
+        self._cache: Dict[int, List[str]] = {}
         self.loop.create_task(self.initialize())
 
     async def initialize(self) -> None:
@@ -59,10 +60,12 @@ class PrefixManager:
         await self.cursor.execute(statements.CREATE_PREFIX_TABLE)
 
     async def get_prefixes(self, guild_id: int) -> List[str]:
-        data = await self.cursor.fetch_val(statements.SELECT_PREFIXES, {"guild_id": guild_id})
-        if not data:
-            return []
-        return json.loads(data)
+        if not self._cache.get(guild_id):
+            data = await self.cursor.fetch_val(statements.SELECT_PREFIXES, {"guild_id": guild_id})
+            if not data:
+                return []
+            self._cache[guild_id] = json.loads(data)
+        return self._cache[guild_id]
 
     async def update_prefixes(self, guild_id: int, prefixes: List[str] = None) -> None:
         new = json.dumps(prefixes or [])
@@ -70,6 +73,10 @@ class PrefixManager:
             await self.cursor.execute(
                 statements.UPSERT_PREFIXES, {"prefixes": new, "guild_id": guild_id}
             )
+            if prefixes:
+                self._cache[guild_id] = prefixes
+            else:
+                self._cache.pop(guild_id, None)
 
     async def teardown(self):
         await self.cursor.disconnect()
@@ -79,17 +86,29 @@ class BlacklistManager:
     def __init__(self, loop: asyncio.AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
         self.cursor = Database(f"sqlite:///{Path(__file__).parent}/data/blacklist.db")
+        self._cache: Dict[int, str] = {}
         self.loop.create_task(self.initialize())
 
     async def initialize(self):
         await self.cursor.connect()
         await self.cursor.execute(statements.CREATE_BLACKLIST_TABLE)
+        await self.get_blacklist()
 
     async def get_blacklist(self, user_id: int = None) -> Dict[int, str]:
         if not user_id:
-            data = await self.cursor.fetch_all("SELECT user_id, reason FROM blacklist;")
-            return {k: v for k, v in data}
-        await self.cursor.fetch_val(statements.SELECT_BLACKLIST, {"user_id": user_id})
+            if not self._cache: # starting up
+                data = await self.cursor.fetch_all("SELECT user_id, reason FROM blacklist;")
+                if not data:
+                    return {}
+                ret = {k: v for k, v in data}
+                self._cache = ret
+            return self._cache
+        elif ret := self._cache.get(user_id):
+            return {user_id: ret}
+        data = await self.cursor.fetch_val(statements.SELECT_BLACKLIST, {"user_id": user_id})
+        ret = {user_id: data}
+        self._cache[user_id] = data
+        return ret
 
     async def add_to_blacklist(self, users: Iterable[int], reason: str) -> None:
         async with self.cursor.transaction():
@@ -97,17 +116,20 @@ class BlacklistManager:
                 await self.cursor.execute(
                     statements.UPSERT_REASON, {"user_id": user, "reason": reason}
                 )
+                self._cache[user] = reason
 
     async def remove_from_blacklist(self, users: Iterable[int]) -> None:
         async with self.cursor.transaction():
             if not users:
                 await self.cursor.execute("DROP TABLE blacklist")
                 await self.cursor.execute(statements.CREATE_BLACKLIST_TABLE)
+                self._cache = {}
                 return
             for user in users:
                 await self.cursor.execute(
                     "DELETE FROM blacklist WHERE user_id=:user_id", {"user_id": user}
                 )
+                self._cache.pop(user_id, None)
 
 
 class Bot(
@@ -158,8 +180,12 @@ class Bot(
     async def change_prefixes(self, ctx: Context, prefixes: List[str] = None):
         await self.prefix_manager.update_prefixes(ctx.guild.id, prefixes)
 
-    async def get_blacklist(self) -> ...:
-        ...
+    async def on_message(self, msg: discord.Message):
+        if msg.author.bot:
+            return
+        elif msg.author.id in await self.blacklist_manager.get_blacklist():
+            return
+        await self.process_commands(msg)
 
     async def on_command_error(self, ctx: Context, exception: BaseException) -> None:
         if isinstance(exception, commands.CommandNotFound):
