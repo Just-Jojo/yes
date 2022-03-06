@@ -148,13 +148,11 @@ class Bot(
             if msg.guild:
                 prefixes = await self.prefix_manager.get_prefixes(msg.guild.id)
                 base = prefixes or base
-            ret =commands.when_mentioned_or(*base)(
+            return commands.when_mentioned_or(*base)(
                 bot, msg
             )  # Always gonna have the bot mention as a prefix :D
-            log.info(ret)
-            return ret
 
-        super().__init__(_prefix, help_command=None)
+        super().__init__(_prefix, help_command=None, intents=discord.Intents.all())
         for ext in extensions:
             try:
                 self.load_extension(ext)
@@ -187,7 +185,6 @@ class Bot(
             return
         elif msg.author.id in await self.blacklist_manager.get_blacklist():
             return
-        log.info("Processing commands")
         await self.process_commands(msg)
 
     async def on_command_error(self, ctx: Context, exception: BaseException) -> None:
