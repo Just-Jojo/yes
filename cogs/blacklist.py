@@ -6,8 +6,8 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Union
 
-import nextcord as discord  # Lmao
-from nextcord.ext import commands  # type:ignore
+import discord as discord  # Lmao
+from discord.ext import commands  # type:ignore
 
 from utils import Context
 from utils.chat_formatting import pagify, box

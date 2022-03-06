@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-import nextcord as discord
-from nextcord.ext import commands  # type:ignore
+import discord as discord
+from discord.ext import commands  # type:ignore
 
 if TYPE_CHECKING:
     from ..bot import Bot

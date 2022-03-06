@@ -8,9 +8,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, List, Optional, Type, TypeVar, Union
 
-import nextcord as discord  # nextcord tbh
+import discord as discord  # discord tbh
 from databases import Database
-from nextcord.ext import commands  # type:ignore
+from discord.ext import commands  # type:ignore
 
 import config
 import statements
@@ -25,9 +25,9 @@ extensions: List[str] = [f"cogs.{ext}" for ext in ("general", "blacklist")]
 @contextmanager
 def init_logging():
     try:
-        logging.getLogger("nextcord").setLevel(logging.INFO)
-        logging.getLogger("nextcord.http").setLevel(logging.WARNING)
-        logging.getLogger("nextcord.gateway").setLevel(logging.WARNING)
+        logging.getLogger("discord").setLevel(logging.INFO)
+        logging.getLogger("discord.http").setLevel(logging.WARNING)
+        logging.getLogger("discord.gateway").setLevel(logging.WARNING)
         log = logging.getLogger()
         log.setLevel(logging.INFO)
         handler = logging.handlers.RotatingFileHandler(
@@ -148,9 +148,11 @@ class Bot(
             if msg.guild:
                 prefixes = await self.prefix_manager.get_prefixes(msg.guild.id)
                 base = prefixes or base
-            return commands.when_mentioned_or(*base)(
+            ret =commands.when_mentioned_or(*base)(
                 bot, msg
             )  # Always gonna have the bot mention as a prefix :D
+            log.info(ret)
+            return ret
 
         super().__init__(_prefix, help_command=None)
         for ext in extensions:
@@ -185,6 +187,7 @@ class Bot(
             return
         elif msg.author.id in await self.blacklist_manager.get_blacklist():
             return
+        log.info("Processing commands")
         await self.process_commands(msg)
 
     async def on_command_error(self, ctx: Context, exception: BaseException) -> None:

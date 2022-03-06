@@ -6,8 +6,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-import nextcord as discord
-from nextcord.ext import commands
+import discord as discord
+from discord.ext import commands
 
 from utils import Context
 
