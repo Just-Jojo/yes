@@ -1,3 +1,6 @@
+# Copyright (c) 2021 - Jojo#7791
+# Licensed under MIT
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
@@ -12,8 +15,10 @@ if TYPE_CHECKING:
 class Context(commands.Context):
     """An extension of discord.ext.commands.Context"""
 
-    if TYPE_CHECKING:
-        bot: Bot
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if TYPE_CHECKING:
+            bot: Bot
 
     async def tick(self, *, check: bool = True) -> bool:
         emoji = "\N{WHITE HEAVY CHECK MARK}" if check else "\N{CROSS MARK}"

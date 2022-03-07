@@ -8,8 +8,8 @@ import json
 import logging.handlers
 import sys
 from contextlib import contextmanager
-from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Optional, Type, TypeVar, Union
+import pathlib
+from typing import TYPE_CHECKING, Iterable, List, Optional, Type, TypeVar, Union, Any
 
 import discord  # discord tbh
 from databases import Database
@@ -52,9 +52,10 @@ def init_logging():
 
 
 class PrefixManager:
-    def __init__(self, loop: asyncio.AbstractEventLoop = None):
+    def __init__(self, bot: Bot, loop: asyncio.AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
-        self.cursor = Database(f"sqlite:///{Path(__file__).parent}/data/prefixes.db")
+        self.bot = bot
+        self.cursor = Database(f"sqlite:///{self.bot.datapath}/prefixes.db")
         self._cache: Dict[int, List[str]] = {}
         self.loop.create_task(self.initialize())
 
@@ -86,9 +87,10 @@ class PrefixManager:
 
 
 class BlacklistManager:
-    def __init__(self, loop: asyncio.AbstractEventLoop = None):
+    def __init__(self, bot: Bot, loop: asyncio.AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
-        self.cursor = Database(f"sqlite:///{Path(__file__).parent}/data/blacklist.db")
+        self.bot = bot
+        self.cursor = Database(f"sqlite:///{self.bot.datapath}/blacklist.db")
         self._cache: Dict[int, str] = {}
         self.loop.create_task(self.initialize())
 
@@ -144,7 +146,7 @@ class Bot(
     __version__ = "1.0.0.dev0"
 
     def __init__(self):
-        self.prefix_manager = PrefixManager()
+        self.prefix_manager = PrefixManager(self)
 
         async def _prefix(bot: Bot, msg: discord.Message) -> List[str]:
             base = config.prefixes
@@ -161,7 +163,7 @@ class Bot(
                 self.load_extension(ext)
             except commands.ExtensionFailed as e:
                 log.exception("Failed to load extension %s", ext, exc_info=e)
-        self.blacklist_manager = BlacklistManager(self.loop)
+        self.blacklist_manager = BlacklistManager(self, self.loop)
         self.tree = discord.app_commands.CommandTree(self)
 
     async def shutdown(self):
@@ -213,6 +215,14 @@ class Bot(
 
     async def start(self, *args, **kwargs) -> None:
         await super().start(config.token, reconnect=True)
+
+    @property
+    def datapath(self) -> pathlib.PosixPath:
+        return pathlib.Path(__file__).parent / "data"
+
+    @datapath.setter
+    def datapath(self, val: Any) -> None:
+        raise RuntimeError("You can't set the bot's datapath, silly")
 
 
 if __name__ == "__main__":

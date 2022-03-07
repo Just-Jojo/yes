@@ -4,7 +4,7 @@
 import logging
 
 
-log = logging.getLogger("pagify")
+log = logging.getLogger("chat_formatting")
 __all__ = ["pagify", "box"]
 
 

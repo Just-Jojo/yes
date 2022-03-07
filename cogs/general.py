@@ -63,6 +63,12 @@ class General(commands.Cog):
         await self.bot.user.edit(avatar=data)
         await ctx.tick()
 
+    @commands.command(name="reload")
+    @commands.is_owner()
+    async def reload_cog(self, ctx: Context, cog_name: str):
+        self.bot.reload_extension(f"cogs.{cog_name}")
+        await ctx.tick()
+
     async def _init(self) -> None:
         await self.bot.wait_until_ready()
         await self.bot.tree.sync()

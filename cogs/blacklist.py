@@ -49,6 +49,15 @@ class BlacklistMenu(discord.ui.View):
         self.msg: discord.Message = None
         super().__init__()
 
+    async def on_timeout(self) -> None:
+        await self.msg.edit(view=None)
+
+    async def interaction_check(self, inter: discord.Interaction) -> bool:
+        if not await self.ctx.bot.is_owner(inter.user):
+            await inter.response.send_message("Only the bot owner can interact with this menu", ephemeral=True)
+            return False
+        return True
+
     async def show_checked_page(self, page_number: int) -> None:
         try:
             if self.source.max_pages > page_number >= 0:
