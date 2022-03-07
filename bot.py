@@ -1,3 +1,6 @@
+# Copyright (c) 2021 - Jojo#7791
+# Licensed under MIT
+
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, List, Optional, Type, TypeVar, Union
 
-import discord as discord  # discord tbh
+import discord  # discord tbh
 from databases import Database
 from discord.ext import commands  # type:ignore
 
@@ -19,7 +22,7 @@ from utils import Context
 log = logging.getLogger(__file__)
 log.setLevel(logging.DEBUG)
 CTX = TypeVar("CTX")
-extensions: List[str] = [f"cogs.{ext}" for ext in ("general", "blacklist")]
+extensions: List[str] = [f"cogs.{ext}" for ext in ("general", "blacklist", "tags")]
 
 
 @contextmanager
@@ -159,6 +162,7 @@ class Bot(
             except commands.ExtensionFailed as e:
                 log.exception("Failed to load extension %s", ext, exc_info=e)
         self.blacklist_manager = BlacklistManager(self.loop)
+        self.tree = discord.app_commands.CommandTree(self)
 
     async def shutdown(self):
         await self.prefix_manager.teardown()
@@ -197,6 +201,8 @@ class Bot(
                 await ctx.send(exception.args[0])
             else:
                 await ctx.show_help()  # TODO this function
+        elif isinstance(exception, commands.MissingRequiredArgument):
+            await ctx.show_help()
         elif isinstance(exception, commands.NSFWChannelRequired):
             await ctx.send(
                 "Please run this command in an nsfw channel"
@@ -212,4 +218,9 @@ class Bot(
 if __name__ == "__main__":
     with init_logging():
         bot = Bot()
+
+        @bot.tree.command(guild=discord.Object(939361342270353408))
+        async def test(interaction: discord.Interaction):
+            await interaction.response.send_message("Hello father.")
+
         bot.run()

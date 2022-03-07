@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-import discord as discord
+import discord
 from discord.ext import commands  # type:ignore
 
 if TYPE_CHECKING:

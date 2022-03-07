@@ -6,7 +6,7 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Union
 
-import discord as discord  # Lmao
+import discord  # Lmao
 from discord.ext import commands  # type:ignore
 
 from utils import Context
